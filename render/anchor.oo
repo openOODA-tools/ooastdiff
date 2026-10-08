@@ -1,0 +1,16 @@
+// # Render Anchor Module
+//
+// Logline: Re-exports render formatting and diff presentation facilities.
+//
+// Setup: Pure anchor re-exporting rendering components.
+//
+// Beats:
+//   1. Re-export diff theme and terminal formatting functions.
+//   2. Re-export JSON serializers for diff structures.
+//   3. Provide unified presentation interface.
+
+import "render/diff_theme.oo";
+
+pub fn render_version() -> String {
+    return "0.2.0";
+}

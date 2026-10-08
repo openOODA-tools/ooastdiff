@@ -1,0 +1,30 @@
+// # AST Semantic Token Definition
+//
+// Logline: Data structure representing a normalized lexical and syntactic token in program source.
+//
+// Setup: Pure record definitions without ambient authority.
+//
+// Beats:
+//   1. Define AstToken struct capturing token category, literal value, and source coordinates.
+//   2. Create constructor with normalized category and coordinate values.
+//   3. Implement token equality predicate comparing semantic payload while ignoring position.
+
+pub type AstToken = struct {
+    kind: String,
+    value: String,
+    line: Int,
+    col: Int
+};
+
+pub fn make_token(kind: String, value: String, line: Int, col: Int) -> AstToken {
+    return AstToken {
+        kind: kind,
+        value: value,
+        line: line,
+        col: col
+    };
+}
+
+pub fn tokens_equal(a: AstToken, b: AstToken) -> Bool {
+    return (a.kind == b.kind) && (a.value == b.value);
+}

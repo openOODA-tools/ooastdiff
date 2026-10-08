@@ -1,52 +1,117 @@
-// # ooastdiff Main Entry Point
+// # ooastdiff Main Entry Point - AST Syntax Differ
 //
 // Logline: Programming language AST differ ignoring cosmetic whitespace and comment changes.
 //
-// Setup: Demands explicit capability tokens and standard argument list.
+// Setup: Requires FsReadCap, ProcessCap, EnvCap. Operates with zero ambient authority.
 //
 // Beats:
 //   1. Parse command-line options and dispatch --help, --version, or --mcp.
-//   2. Execute capability-bounded ooastdiff operations.
-//   3. Format and output structured results to standard output.
+//   2. Read target source files via capability-bounded filesystem access.
+//   3. Tokenize inputs, execute LCS token alignment, and format structural report.
 
-fn render_help() -> String {
-    return "ooastdiff 0.1.0 (openOODA sovereign diff & comparison)\n"
-        + "usage: ooastdiff [options] [ARGUMENTS]...\n\n"
-        + "Programming language AST differ ignoring cosmetic whitespace and comment changes.\n\n"
-        + "Options:\n"
-        + "  -h, --help           display this help and exit\n"
-        + "  -v, --version        output version information and exit\n"
-        + "      --json           output formatted as JSON Lines\n"
-        + "      --color <WHEN>   colorize output: auto, always, never [default: auto]\n"
-        + "      --theme <NAME>   override active oote palette\n"
-        + "      --mcp            run as Model Context Protocol stdio server\n";
-}
+import "core/ast_token.oo";
+import "core/tokenizer.oo";
+import "core/diff_result.oo";
+import "core/lcs_diff.oo";
+import "render/diff_theme.oo";
+import "ipc/astdiff_opts.oo";
+import "ipc/mcp_serve.oo";
 
-fn render_version() -> String {
-    return "ooastdiff 0.1.0 (openOODA sovereign diff & comparison)\n";
-}
+pub fn main(
+    fs: &FsReadCap,
+    proc_cap: &ProcessCap,
+    env: &EnvCap,
+    args: List[String]
+) -> Result[Int, String] {
+    let opts: AstDiffOpts = parse_opts(args);
 
-fn main(args: List[String]) -> Int {
-    let num_args: Int = list_len(args);
-    let mut i: Int = 0;
-
-    while i < num_args {
-        let arg: String = list_get(args, i);
-        if arg == "-h" || arg == "--help" {
-            print(render_help());
-            return 0;
-        }
-        if arg == "-v" || arg == "--version" {
-            print(render_version());
-            return 0;
-        }
-        if arg == "--mcp" {
-            print("{\"jsonrpc\":\"2.0\",\"result\":{\"status\":\"ready\",\"tool\":\"ooastdiff\"}}\n");
-            return 0;
-        }
-        i = i + 1;
+    if opts.show_help {
+        print(render_help());
+        return Ok(0);
+    }
+    if opts.show_version {
+        println("ooastdiff 0.2.0 (openOODA sovereign diff & comparison)");
+        return Ok(0);
+    }
+    if opts.mcp_mode {
+        run_mcp_server(fs);
+        return Ok(0);
     }
 
-    print("ooastdiff: sovereign capability-bounded utility ready\n");
-    return 0;
+    if chars_len(opts.error_msg) > 0 {
+        println("ooastdiff: " + opts.error_msg);
+        println("Try 'ooastdiff --help' for more information.");
+        return Ok(2);
+    }
+
+    if opts.tokens_only {
+        let res: Result[String, String] = read_file(fs, opts.file1);
+        if !res.is_ok() {
+            println("ooastdiff: " + opts.file1 + ": No such file or directory");
+            return Ok(2);
+        }
+        let src: String = match res { Ok(s) => s, Err(_) => "" };
+        let tokens: List[AstToken] = tokenize_source(src);
+        if opts.json_output {
+            let mut j: String = "[";
+            let n: Int = list_len(tokens);
+            let mut i: Int = 0;
+            while i < n {
+                if i > 0 { j = j + ","; }
+                let t: AstToken = list_get(tokens, i);
+                j = j + render_token_json(t);
+                i = i + 1;
+            }
+            j = j + "]";
+            println(j);
+        } else {
+            let n: Int = list_len(tokens);
+            let mut i: Int = 0;
+            while i < n {
+                let t: AstToken = list_get(tokens, i);
+                println("[" + t.kind + "] " + t.value + " (L" + to_string(t.line) + ":" + to_string(t.col) + ")");
+                i = i + 1;
+            }
+        }
+        return Ok(0);
+    }
+
+    let r1: Result[String, String] = read_file(fs, opts.file1);
+    if !r1.is_ok() {
+        println("ooastdiff: " + opts.file1 + ": No such file or directory");
+        return Ok(2);
+    }
+    let r2: Result[String, String] = read_file(fs, opts.file2);
+    if !r2.is_ok() {
+        println("ooastdiff: " + opts.file2 + ": No such file or directory");
+        return Ok(2);
+    }
+
+    let src1: String = match r1 { Ok(s) => s, Err(_) => "" };
+    let src2: String = match r2 { Ok(s) => s, Err(_) => "" };
+    let tok1: List[AstToken] = tokenize_source(src1);
+    let tok2: List[AstToken] = tokenize_source(src2);
+    let report: AstDiffReport = diff_tokens(tok1, tok2);
+
+    if opts.json_output {
+        println(render_report_json(report));
+    } else {
+        if !report.is_identical {
+            let n: Int = list_len(report.hunks);
+            let mut i: Int = 0;
+            while i < n {
+                let h: DiffHunk = list_get(report.hunks, i);
+                if h.op != "=" {
+                    println(render_hunk_line(h));
+                }
+                i = i + 1;
+            }
+        }
+        println(render_report_summary(report));
+    }
+
+    if report.is_identical {
+        return Ok(0);
+    }
+    return Ok(1);
 }

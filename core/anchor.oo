@@ -1,0 +1,15 @@
+// # ooastdiff Core Subsystem Anchor
+//
+// Logline: Consolidates and re-exports token models, lexers, diff algorithms, and report structures.
+//
+// Setup: Root barrel shim for core syntax differ domain.
+//
+// Beats:
+//   1. Re-export semantic AstToken models and token constructors.
+//   2. Re-export language tokenizer and comment stripping routines.
+//   3. Re-export token-level Myers LCS alignment and diff report models.
+
+import "ast_token.oo";
+import "tokenizer.oo";
+import "diff_result.oo";
+import "lcs_diff.oo";

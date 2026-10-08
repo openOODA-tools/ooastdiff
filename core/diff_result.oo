@@ -1,0 +1,57 @@
+// # AST Diff Report and Hunk Models
+//
+// Logline: Data structures capturing structural syntax edits, additions, and deletions.
+//
+// Setup: Pure record definitions without ambient authority.
+//
+// Beats:
+//   1. Define DiffHunk representing individual token mutations (+, -, =).
+//   2. Define AstDiffReport capturing summary metrics and semantic identity.
+//   3. Provide helper constructors for empty and evaluated reports.
+
+import "core/ast_token.oo";
+
+pub type DiffHunk = struct {
+    op: String,
+    kind: String,
+    value: String,
+    line: Int,
+    col: Int
+};
+
+pub fn make_hunk(op: String, t: AstToken) -> DiffHunk {
+    return DiffHunk {
+        op: op,
+        kind: t.kind,
+        value: t.value,
+        line: t.line,
+        col: t.col
+    };
+}
+
+pub type AstDiffReport = struct {
+    hunks: List[DiffHunk],
+    additions: Int,
+    deletions: Int,
+    total_left: Int,
+    total_right: Int,
+    is_identical: Bool
+};
+
+pub fn make_report(
+    hunks: List[DiffHunk],
+    additions: Int,
+    deletions: Int,
+    total_left: Int,
+    total_right: Int
+) -> AstDiffReport {
+    let identical: Bool = additions == 0 && deletions == 0;
+    return AstDiffReport {
+        hunks: hunks,
+        additions: additions,
+        deletions: deletions,
+        total_left: total_left,
+        total_right: total_right,
+        is_identical: identical
+    };
+}

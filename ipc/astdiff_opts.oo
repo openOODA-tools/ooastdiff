@@ -1,0 +1,96 @@
+// # AST Diff Options Parser
+//
+// Logline: Parses command-line arguments into structured invocation options.
+//
+// Setup: CLI flag parser for ooastdiff AST comparison and MCP server mode.
+//
+// Beats:
+//   1. Define AstDiffOpts struct capturing execution modes.
+//   2. Parse POSIX flags including --json, --mcp, --tokens, and help/version.
+//   3. Extract left and right file targets with bounds checking.
+
+pub type AstDiffOpts = struct {
+    file1: String,
+    file2: String,
+    json_output: Bool,
+    mcp_mode: Bool,
+    tokens_only: Bool,
+    show_version: Bool,
+    show_help: Bool,
+    error_msg: String
+};
+
+pub fn default_opts() -> AstDiffOpts {
+    return AstDiffOpts {
+        file1: "",
+        file2: "",
+        json_output: false,
+        mcp_mode: false,
+        tokens_only: false,
+        show_version: false,
+        show_help: false,
+        error_msg: ""
+    };
+}
+
+pub fn parse_opts(args: List[String]) -> AstDiffOpts {
+    let mut opts: AstDiffOpts = default_opts();
+    let n: Int = list_len(args);
+    let mut positional: List[String] = list_new();
+    let mut i: Int = 0;
+
+    while i < n {
+        let arg: String = list_get(args, i);
+        if arg == "-h" || arg == "--help" {
+            opts.show_help = true;
+            return opts;
+        } else if arg == "-v" || arg == "--version" {
+            opts.show_version = true;
+            return opts;
+        } else if arg == "--json" || arg == "-j" {
+            opts.json_output = true;
+        } else if arg == "--mcp" {
+            opts.mcp_mode = true;
+        } else if arg == "--tokens" {
+            opts.tokens_only = true;
+        } else if str_starts_with(arg, "-") {
+            opts.error_msg = "Unknown option: " + arg;
+            return opts;
+        } else {
+            positional = list_push(positional, arg);
+        }
+        i = i + 1;
+    }
+
+    if opts.mcp_mode {
+        return opts;
+    }
+
+    let pos_len: Int = list_len(positional);
+    if pos_len == 0 {
+        opts.show_help = true;
+        return opts;
+    } else if opts.tokens_only && pos_len >= 1 {
+        opts.file1 = list_get(positional, 0);
+    } else if pos_len == 2 {
+        opts.file1 = list_get(positional, 0);
+        opts.file2 = list_get(positional, 1);
+    } else {
+        opts.error_msg = "ooastdiff requires exactly two files to compare (or one file with --tokens)";
+    }
+
+    return opts;
+}
+
+pub fn render_help() -> String {
+    return "Usage: ooastdiff [options] <file1> <file2>\n" +
+        "       ooastdiff --tokens <file>\n" +
+        "       ooastdiff --mcp\n\n" +
+        "Language-agnostic AST syntax-aware diffing tool with token LCS alignment.\n\n" +
+        "Options:\n" +
+        "  -j, --json     Output structural diff report as JSON\n" +
+        "      --tokens   Tokenize a single source file and output token stream\n" +
+        "      --mcp      Run Model Context Protocol (MCP) JSON-RPC 2.0 stdio server\n" +
+        "  -v, --version  Show version information\n" +
+        "  -h, --help     Show this help message\n";
+}

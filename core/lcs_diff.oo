@@ -1,0 +1,82 @@
+// # Token-Level AST Differencing Engine
+//
+// Logline: Computes structural syntax deltas across AST token streams using windowed alignment.
+//
+// Setup: Pure record processor comparing semantic AstToken sequences.
+//
+// Beats:
+//   1. Traverse token sequences aligning identical semantic nodes.
+//   2. Resolve insertion and deletion deltas within lookahead windows.
+//   3. Aggregate additions, deletions, and semantic identity metrics into an AstDiffReport.
+
+import "core/ast_token.oo";
+import "core/diff_result.oo";
+
+fn find_token_offset(target: AstToken, list: List[AstToken], start_idx: Int, max_ahead: Int) -> Int {
+    let n: Int = list_len(list);
+    let limit: Int = if start_idx + max_ahead < n { start_idx + max_ahead } else { n };
+    let mut k: Int = start_idx;
+    while k < limit {
+        let cand: AstToken = list_get(list, k);
+        if tokens_equal(target, cand) {
+            return k - start_idx;
+        }
+        k = k + 1;
+    }
+    return -1;
+}
+
+pub fn diff_tokens(tokens_a: List[AstToken], tokens_b: List[AstToken]) -> AstDiffReport {
+    let na: Int = list_len(tokens_a);
+    let nb: Int = list_len(tokens_b);
+    let mut hunks: List[DiffHunk] = list_new();
+    let mut additions: Int = 0;
+    let mut deletions: Int = 0;
+
+    let mut i: Int = 0;
+    let mut j: Int = 0;
+
+    while i < na && j < nb {
+        let ta: AstToken = list_get(tokens_a, i);
+        let tb: AstToken = list_get(tokens_b, j);
+
+        if tokens_equal(ta, tb) {
+            hunks = list_push(hunks, make_hunk("=", ta));
+            i = i + 1;
+            j = j + 1;
+        } else {
+            let offset_b: Int = find_token_offset(ta, tokens_b, j + 1, 16);
+            let offset_a: Int = find_token_offset(tb, tokens_a, i + 1, 16);
+
+            if offset_b >= 0 && (offset_a < 0 || offset_b <= offset_a) {
+                hunks = list_push(hunks, make_hunk("+", tb));
+                additions = additions + 1;
+                j = j + 1;
+            } else if offset_a >= 0 {
+                hunks = list_push(hunks, make_hunk("-", ta));
+                deletions = deletions + 1;
+                i = i + 1;
+            } else {
+                hunks = list_push(hunks, make_hunk("-", ta));
+                deletions = deletions + 1;
+                i = i + 1;
+            }
+        }
+    }
+
+    while i < na {
+        let ta: AstToken = list_get(tokens_a, i);
+        hunks = list_push(hunks, make_hunk("-", ta));
+        deletions = deletions + 1;
+        i = i + 1;
+    }
+
+    while j < nb {
+        let tb: AstToken = list_get(tokens_b, j);
+        hunks = list_push(hunks, make_hunk("+", tb));
+        additions = additions + 1;
+        j = j + 1;
+    }
+
+    return make_report(hunks, additions, deletions, na, nb);
+}

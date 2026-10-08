@@ -1,0 +1,78 @@
+// # AST Diff Terminal and JSON Formatter
+//
+// Logline: Formats syntax token differences, semantic identity verdicts, and JSON payloads.
+//
+// Setup: Pure string formatter without ambient side effects.
+//
+// Beats:
+//   1. Format individual diff hunks with +/- change markers.
+//   2. Render high-level summary of additions, deletions, and semantic identity.
+//   3. Serialize diff reports and token sequences into structured JSON.
+
+import "core/ast_token.oo";
+import "core/diff_result.oo";
+
+pub fn escape_json(s: String) -> String {
+    let mut out: String = "";
+    let n: Int = chars_len(s);
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" {
+            out = out + "\\\\";
+        } else if c == "\"" {
+            out = out + "\\\"";
+        } else if c == "\n" {
+            out = out + "\\n";
+        } else if c == "\r" {
+            out = out + "\\r";
+        } else if c == "\t" {
+            out = out + "\\t";
+        } else {
+            out = out + c;
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn render_hunk_line(hunk: DiffHunk) -> String {
+    let prefix: String = if hunk.op == "+" {
+        "+"
+    } else if hunk.op == "-" {
+        "-"
+    } else {
+        " "
+    };
+    return prefix + " [" + hunk.kind + "] " + hunk.value + " (L" + to_string(hunk.line) + ")";
+}
+
+pub fn render_report_summary(report: AstDiffReport) -> String {
+    if report.is_identical {
+        return "SEMANTICALLY IDENTICAL: 0 syntax changes (cosmetic whitespace and comments only)";
+    }
+    return "AST DELTA: " + to_string(report.additions) + " additions, " +
+        to_string(report.deletions) + " deletions (" +
+        to_string(report.total_left) + " left tokens vs " +
+        to_string(report.total_right) + " right tokens)";
+}
+
+pub fn render_report_json(report: AstDiffReport) -> String {
+    let mut j: String = "{";
+    j = j + "\"identical\":" + (if report.is_identical { "true" } else { "false" }) + ",";
+    j = j + "\"additions\":" + to_string(report.additions) + ",";
+    j = j + "\"deletions\":" + to_string(report.deletions) + ",";
+    j = j + "\"total_left\":" + to_string(report.total_left) + ",";
+    j = j + "\"total_right\":" + to_string(report.total_right) + ",";
+    j = j + "\"summary\":\"" + escape_json(render_report_summary(report)) + "\"}";
+    return j;
+}
+
+pub fn render_token_json(token: AstToken) -> String {
+    let mut j: String = "{";
+    j = j + "\"kind\":\"" + escape_json(token.kind) + "\",";
+    j = j + "\"value\":\"" + escape_json(token.value) + "\",";
+    j = j + "\"line\":" + to_string(token.line) + ",";
+    j = j + "\"col\":" + to_string(token.col) + "}";
+    return j;
+}

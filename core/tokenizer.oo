@@ -1,0 +1,115 @@
+// # Language Agnostic Source Code Tokenizer
+//
+// Logline: Lexes source code into semantic AST tokens, stripping comments and cosmetic whitespace.
+//
+// Setup: Pure string analyzer without ambient side effects.
+//
+// Beats:
+//   1. Scan input source code tracking 1-indexed line and column coordinates.
+//   2. Skip inline and block comments and collapse redundant whitespace runs.
+//   3. Emit tokenized stream of identifiers, literals, keywords, and operators.
+
+import "core/ast_token.oo";
+
+fn is_letter_or_digit(b: Int) -> Bool {
+    return (b >= 97 && b <= 122) || (b >= 65 && b <= 90) || (b >= 48 && b <= 57) || (b == 95);
+}
+
+fn is_digit(b: Int) -> Bool {
+    return b >= 48 && b <= 57;
+}
+
+pub fn tokenize_source(source: String) -> List[AstToken] {
+    let mut tokens: List[AstToken] = list_new();
+    let n: Int = chars_len(source);
+    let mut i: Int = 0;
+    let mut line: Int = 1;
+    let mut col: Int = 1;
+
+    while i < n {
+        let b: Int = byte_at(source, i);
+        let c: String = char_at(source, i);
+
+        if c == "\n" {
+            line = line + 1;
+            col = 1;
+            i = i + 1;
+        } else if c == " " || c == "\t" || c == "\r" {
+            col = col + 1;
+            i = i + 1;
+        } else if c == "/" && i + 1 < n && char_at(source, i + 1) == "/" {
+            while i < n && char_at(source, i) != "\n" {
+                i = i + 1;
+            }
+        } else if c == "#" {
+            while i < n && char_at(source, i) != "\n" {
+                i = i + 1;
+            }
+        } else if c == "/" && i + 1 < n && char_at(source, i + 1) == "*" {
+            i = i + 2;
+            col = col + 2;
+            while i + 1 < n && !(char_at(source, i) == "*" && char_at(source, i + 1) == "/") {
+                if char_at(source, i) == "\n" {
+                    line = line + 1;
+                    col = 1;
+                } else {
+                    col = col + 1;
+                }
+                i = i + 1;
+            }
+            if i + 1 < n {
+                i = i + 2;
+                col = col + 2;
+            }
+        } else if c == "\"" || c == "'" {
+            let quote_code: Int = b;
+            let start_col: Int = col;
+            let mut str_val: String = c;
+            i = i + 1;
+            col = col + 1;
+            while i < n && byte_at(source, i) != quote_code {
+                let sc: String = char_at(source, i);
+                if sc == "\\" && i + 1 < n {
+                    str_val = str_val + sc + char_at(source, i + 1);
+                    i = i + 2;
+                    col = col + 2;
+                } else {
+                    str_val = str_val + sc;
+                    i = i + 1;
+                    col = col + 1;
+                }
+            }
+            if i < n {
+                str_val = str_val + char_at(source, i);
+                i = i + 1;
+                col = col + 1;
+            }
+            tokens = list_push(tokens, make_token("STR", str_val, line, start_col));
+        } else if is_digit(b) {
+            let start_col: Int = col;
+            let mut num_val: String = "";
+            while i < n && (is_digit(byte_at(source, i)) || char_at(source, i) == "." || char_at(source, i) == "x") {
+                num_val = num_val + char_at(source, i);
+                i = i + 1;
+                col = col + 1;
+            }
+            tokens = list_push(tokens, make_token("NUM", num_val, line, start_col));
+        } else if is_letter_or_digit(b) {
+            let start_col: Int = col;
+            let mut word_val: String = "";
+            while i < n && is_letter_or_digit(byte_at(source, i)) {
+                word_val = word_val + char_at(source, i);
+                i = i + 1;
+                col = col + 1;
+            }
+            tokens = list_push(tokens, make_token("IDENT", word_val, line, start_col));
+        } else {
+            let start_col: Int = col;
+            tokens = list_push(tokens, make_token("OP", c, line, start_col));
+            i = i + 1;
+            col = col + 1;
+        }
+    }
+
+    return tokens;
+}
